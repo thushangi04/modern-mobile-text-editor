@@ -3,6 +3,9 @@ package com.ucsc.is2205.moderntexteditor.editor
 import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.ucsc.is2205.moderntexteditor.data.repository.RepositoryProvider
+import com.ucsc.is2205.moderntexteditor.domain.model.EditorFile
+import com.ucsc.is2205.moderntexteditor.domain.repository.FileRepository
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -33,6 +36,8 @@ class EditorViewModel : ViewModel() {
 
     private var fileManager: FileManager? = null
 
+    private var fileRepository: FileRepository? = null
+
     private var initialized = false
 
     private val undoStack =
@@ -47,36 +52,29 @@ class EditorViewModel : ViewModel() {
         private const val RECOVERY_DELAY_MS = 1500L
     }
 
-    /*
-     * ---------------------------------------------------------
-     * Initialization
-     * ---------------------------------------------------------
-     */
-
     fun initialize(
         context: Context
     ) {
-
         if (initialized) {
             return
         }
 
         fileManager =
-            FileManager(context.applicationContext)
+            FileManager(
+                context.applicationContext
+            )
+
+        fileRepository =
+            RepositoryProvider(
+                context.applicationContext
+            ).fileRepository
 
         initialized = true
 
         loadRecoveryIfAvailable()
     }
 
-    /*
-     * ---------------------------------------------------------
-     * Recovery
-     * ---------------------------------------------------------
-     */
-
     private fun loadRecoveryIfAvailable() {
-
         val manager =
             fileManager
                 ?: return
@@ -107,12 +105,10 @@ class EditorViewModel : ViewModel() {
     }
 
     private fun scheduleRecoverySave() {
-
         recoveryJob?.cancel()
 
         recoveryJob =
             viewModelScope.launch {
-
                 delay(
                     RECOVERY_DELAY_MS
                 )
@@ -124,39 +120,32 @@ class EditorViewModel : ViewModel() {
     }
 
     fun clearRecovery() {
-
         recoveryJob?.cancel()
 
         fileManager?.clearRecovery()
     }
 
     fun hasRecovery(): Boolean {
-
-        return fileManager?.hasRecovery() ?: false
+        return fileManager
+            ?.hasRecovery()
+            ?: false
     }
 
     fun saveRecovery(
         text: String
     ): Boolean {
-
-        return fileManager?.saveRecovery(text) ?: false
+        return fileManager
+            ?.saveRecovery(text)
+            ?: false
     }
 
     fun loadRecovery(): String? {
-
-        return fileManager?.loadRecovery()
+        return fileManager
+            ?.loadRecovery()
     }
 
-    /*
-     * ---------------------------------------------------------
-     * New file
-     * ---------------------------------------------------------
-     */
-
     fun createNewFile() {
-
         if (_uiState.value.text.isNotEmpty()) {
-
             undoStack.add(
                 _uiState.value.text
             )
@@ -180,16 +169,9 @@ class EditorViewModel : ViewModel() {
         updateUndoRedoState()
     }
 
-    /*
-     * ---------------------------------------------------------
-     * Text editing
-     * ---------------------------------------------------------
-     */
-
     fun updateText(
         newText: String
     ) {
-
         val currentState =
             _uiState.value
 
@@ -222,14 +204,7 @@ class EditorViewModel : ViewModel() {
         scheduleRecoverySave()
     }
 
-    /*
-     * ---------------------------------------------------------
-     * Undo
-     * ---------------------------------------------------------
-     */
-
     fun undo() {
-
         if (undoStack.isEmpty()) {
             return
         }
@@ -257,14 +232,7 @@ class EditorViewModel : ViewModel() {
         scheduleRecoverySave()
     }
 
-    /*
-     * ---------------------------------------------------------
-     * Redo
-     * ---------------------------------------------------------
-     */
-
     fun redo() {
-
         if (redoStack.isEmpty()) {
             return
         }
@@ -292,14 +260,7 @@ class EditorViewModel : ViewModel() {
         scheduleRecoverySave()
     }
 
-    /*
-     * ---------------------------------------------------------
-     * Save
-     * ---------------------------------------------------------
-     */
-
     fun saveFile(): Boolean {
-
         val manager =
             fileManager
                 ?: return false
@@ -314,11 +275,18 @@ class EditorViewModel : ViewModel() {
             )
 
         if (success) {
-
-            _uiState.value =
+            val savedState =
                 state.copy(
                     isModified = false
                 )
+
+            _uiState.value =
+                savedState
+
+            saveFileMetadata(
+                state = savedState,
+                updateModifiedTime = true
+            )
 
             clearRecovery()
         }
@@ -326,16 +294,9 @@ class EditorViewModel : ViewModel() {
         return success
     }
 
-    /*
-     * ---------------------------------------------------------
-     * Save As
-     * ---------------------------------------------------------
-     */
-
     fun saveAs(
         newFileName: String
     ): Boolean {
-
         val manager =
             fileManager
                 ?: return false
@@ -354,12 +315,19 @@ class EditorViewModel : ViewModel() {
             )
 
         if (success) {
-
-            _uiState.value =
+            val savedState =
                 _uiState.value.copy(
                     fileName = cleanName,
                     isModified = false
                 )
+
+            _uiState.value =
+                savedState
+
+            saveFileMetadata(
+                state = savedState,
+                updateModifiedTime = true
+            )
 
             clearRecovery()
         }
@@ -367,16 +335,9 @@ class EditorViewModel : ViewModel() {
         return success
     }
 
-    /*
-     * ---------------------------------------------------------
-     * Open file
-     * ---------------------------------------------------------
-     */
-
     fun openFile(
         fileName: String
     ): Boolean {
-
         val manager =
             fileManager
                 ?: return false
@@ -394,8 +355,13 @@ class EditorViewModel : ViewModel() {
             _uiState.value.copy(
                 fileName = fileName,
                 text = content,
-                isModified = false
+                isModified = false,
+                isReadOnly = false
             )
+
+        loadAndUpdateFileMetadata(
+            fileName = fileName
+        )
 
         clearRecovery()
 
@@ -404,49 +370,34 @@ class EditorViewModel : ViewModel() {
         return true
     }
 
-    /*
-     * ---------------------------------------------------------
-     * File lists
-     * ---------------------------------------------------------
-     */
-
     fun getSavedFiles(): List<String> {
-
         return fileManager
             ?.getSavedFiles()
             ?: emptyList()
     }
 
     fun getRecentFiles(): List<String> {
-
         return fileManager
             ?.getRecentFiles()
             ?: emptyList()
     }
 
-    /*
-     * ---------------------------------------------------------
-     * Read-only mode
-     * ---------------------------------------------------------
-     */
-
     fun toggleReadOnly() {
+        val newReadOnlyStatus =
+            !_uiState.value.isReadOnly
 
         _uiState.value =
             _uiState.value.copy(
                 isReadOnly =
-                    !_uiState.value.isReadOnly
+                    newReadOnlyStatus
             )
+
+        persistReadOnlyStatus(
+            isReadOnly = newReadOnlyStatus
+        )
     }
 
-    /*
-     * ---------------------------------------------------------
-     * Word wrap
-     * ---------------------------------------------------------
-     */
-
     fun toggleWordWrap() {
-
         _uiState.value =
             _uiState.value.copy(
                 wordWrapEnabled =
@@ -454,32 +405,151 @@ class EditorViewModel : ViewModel() {
             )
     }
 
-    /*
-     * ---------------------------------------------------------
-     * Undo / redo state
-     * ---------------------------------------------------------
-     */
+    private fun saveFileMetadata(
+        state: EditorUiState,
+        updateModifiedTime: Boolean
+    ) {
+        val repository =
+            fileRepository
+                ?: return
+
+        val currentTime =
+            System.currentTimeMillis()
+
+        viewModelScope.launch {
+            val existingFile =
+                repository.getFile(
+                    state.fileName
+                )
+
+            val metadata =
+                EditorFile(
+                    fileName = state.fileName,
+                    encoding = state.encoding,
+                    isReadOnly = state.isReadOnly,
+                    lastOpenedAt = currentTime,
+                    lastModifiedAt =
+                        if (updateModifiedTime) {
+                            currentTime
+                        } else {
+                            existingFile
+                                ?.lastModifiedAt
+                                ?: currentTime
+                        }
+                )
+
+            repository.saveFileMetadata(
+                metadata
+            )
+        }
+    }
+
+    private fun loadAndUpdateFileMetadata(
+        fileName: String
+    ) {
+        val repository =
+            fileRepository
+                ?: return
+
+        viewModelScope.launch {
+            val currentTime =
+                System.currentTimeMillis()
+
+            val existingFile =
+                repository.getFile(
+                    fileName
+                )
+
+            val metadata =
+                if (existingFile == null) {
+                    EditorFile(
+                        fileName = fileName,
+                        encoding =
+                            _uiState.value.encoding,
+                        isReadOnly = false,
+                        lastOpenedAt = currentTime,
+                        lastModifiedAt = currentTime
+                    )
+                } else {
+                    existingFile.copy(
+                        lastOpenedAt = currentTime
+                    )
+                }
+
+            repository.saveFileMetadata(
+                metadata
+            )
+
+            if (_uiState.value.fileName == fileName) {
+                _uiState.value =
+                    _uiState.value.copy(
+                        encoding = metadata.encoding,
+                        isReadOnly =
+                            metadata.isReadOnly
+                    )
+            }
+        }
+    }
+
+    private fun persistReadOnlyStatus(
+        isReadOnly: Boolean
+    ) {
+        val repository =
+            fileRepository
+                ?: return
+
+        val manager =
+            fileManager
+                ?: return
+
+        val state =
+            _uiState.value
+
+        if (!manager.fileExists(state.fileName)) {
+            return
+        }
+
+        viewModelScope.launch {
+            val existingFile =
+                repository.getFile(
+                    state.fileName
+                )
+
+            val currentTime =
+                System.currentTimeMillis()
+
+            val metadata =
+                if (existingFile == null) {
+                    EditorFile(
+                        fileName = state.fileName,
+                        encoding = state.encoding,
+                        isReadOnly = isReadOnly,
+                        lastOpenedAt = currentTime,
+                        lastModifiedAt = currentTime
+                    )
+                } else {
+                    existingFile.copy(
+                        isReadOnly = isReadOnly
+                    )
+                }
+
+            repository.saveFileMetadata(
+                metadata
+            )
+        }
+    }
 
     private fun updateUndoRedoState() {
-
         _uiState.value =
             _uiState.value.copy(
                 canUndo =
                     undoStack.isNotEmpty(),
-
                 canRedo =
                     redoStack.isNotEmpty()
             )
     }
 
-    /*
-     * ---------------------------------------------------------
-     * Lifecycle
-     * ---------------------------------------------------------
-     */
-
     override fun onCleared() {
-
         recoveryJob?.cancel()
 
         super.onCleared()

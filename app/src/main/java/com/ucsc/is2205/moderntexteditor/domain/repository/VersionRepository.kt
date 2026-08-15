@@ -4,15 +4,23 @@ import com.ucsc.is2205.moderntexteditor.domain.model.FileVersion
 
 interface VersionRepository {
 
-    fun getVersionsForFile(
+    suspend fun getVersionsForFile(
         fileName: String
     ): List<FileVersion>
 
-    fun createVersion(
+    suspend fun createVersion(
         version: FileVersion
     ): FileVersion
 
-    fun deleteVersionsForFile(
+    suspend fun getVersionById(
+        versionId: Long
+    ): FileVersion?
+
+    suspend fun getBaseVersion(
+        fileName: String
+    ): FileVersion?
+
+    suspend fun deleteVersionsForFile(
         fileName: String
     )
 }
