@@ -1,15 +1,22 @@
 package com.ucsc.is2205.moderntexteditor.navigation
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.ui.platform.LocalContext
+import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import com.ucsc.is2205.moderntexteditor.data.repository.RepositoryProvider
 import com.ucsc.is2205.moderntexteditor.editor.EditorScreen
+import com.ucsc.is2205.moderntexteditor.editor.EditorViewModel
 import com.ucsc.is2205.moderntexteditor.settings.SettingsScreen
 import com.ucsc.is2205.moderntexteditor.syntax.MarkdownPreviewScreen
 import com.ucsc.is2205.moderntexteditor.version.VersionHistoryScreen
+import com.ucsc.is2205.moderntexteditor.version.VersionViewModel
 
 private const val EDITOR_ROUTE = "editor"
 private const val SETTINGS_ROUTE = "settings"
@@ -21,6 +28,38 @@ fun AppNavigation() {
 
     val navController =
         rememberNavController()
+
+    val context =
+        LocalContext.current.applicationContext
+
+    /*
+     * One shared editor ViewModel is used by both the editor
+     * and version-history screens.
+     */
+    val editorViewModel: EditorViewModel =
+        viewModel()
+
+    val editorUiState by
+    editorViewModel.uiState.collectAsState()
+
+    /*
+     * Create the version repository and inject it into
+     * VersionViewModel through its factory.
+     */
+    val versionRepository =
+        remember(context) {
+            RepositoryProvider(
+                context
+            ).versionRepository
+        }
+
+    val versionViewModel: VersionViewModel =
+        viewModel(
+            factory =
+                VersionViewModel.provideFactory(
+                    versionRepository
+                )
+        )
 
     /*
      * Stores Markdown text while navigating
@@ -47,9 +86,7 @@ fun AppNavigation() {
         ) {
 
             EditorScreen(
-
                 onOpenSettings = {
-
                     navController.navigate(
                         SETTINGS_ROUTE
                     ) {
@@ -58,7 +95,6 @@ fun AppNavigation() {
                 },
 
                 onOpenVersionHistory = {
-
                     navController.navigate(
                         VERSION_HISTORY_ROUTE
                     ) {
@@ -67,7 +103,6 @@ fun AppNavigation() {
                 },
 
                 onPreviewMarkdown = { markdown ->
-
                     markdownToPreview.value =
                         markdown
 
@@ -76,7 +111,10 @@ fun AppNavigation() {
                     ) {
                         launchSingleTop = true
                     }
-                }
+                },
+
+                editorViewModel =
+                    editorViewModel
             )
         }
 
@@ -91,9 +129,7 @@ fun AppNavigation() {
         ) {
 
             SettingsScreen(
-
                 onBack = {
-
                     navController.popBackStack()
                 }
             )
@@ -110,13 +146,23 @@ fun AppNavigation() {
         ) {
 
             VersionHistoryScreen(
-
-                fileName = "",
+                fileName =
+                    editorUiState.fileName,
 
                 onBack = {
+                    navController.popBackStack()
+                },
+
+                onRollback = { restoredContent ->
+                    editorViewModel.restoreVersion(
+                        content = restoredContent
+                    )
 
                     navController.popBackStack()
-                }
+                },
+
+                viewModel =
+                    versionViewModel
             )
         }
 
@@ -131,12 +177,10 @@ fun AppNavigation() {
         ) {
 
             MarkdownPreviewScreen(
-
                 markdown =
                     markdownToPreview.value,
 
                 onBack = {
-
                     navController.popBackStack()
                 }
             )
