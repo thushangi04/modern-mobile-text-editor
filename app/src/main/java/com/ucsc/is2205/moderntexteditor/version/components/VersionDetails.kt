@@ -27,6 +27,7 @@ import java.util.Locale
 @Composable
 fun VersionDetails(
     version: FileVersion?,
+    onRollback: (String) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
 
@@ -192,13 +193,28 @@ fun VersionDetails(
                  * -------------------------------------------------
                  */
 
-                Text(
-                    text = "Content",
-                    style =
-                        MaterialTheme.typography.titleSmall,
-                    fontWeight =
-                        FontWeight.SemiBold
-                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "Content",
+                        style =
+                            MaterialTheme.typography.titleSmall,
+                        fontWeight =
+                            FontWeight.SemiBold
+                    )
+    
+                    Spacer(
+                        modifier = Modifier.weight(1f)
+                    )
+    
+                    androidx.compose.material3.Button(
+                        onClick = { onRollback(version.content) }
+                    ) {
+                        Text(text = "Restore")
+                    }
+                }
 
                 Spacer(
                     modifier = Modifier.height(6.dp)

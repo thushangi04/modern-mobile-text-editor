@@ -113,6 +113,13 @@ dependencies {
         "androidx.navigation:navigation-compose:2.9.7"
     )
 
+    /*
+     * Delta generation and patch reconstruction
+     */
+    implementation(
+        "io.github.java-diff-utils:java-diff-utils:4.17"
+    )
+
     testImplementation(
         libs.junit
     )

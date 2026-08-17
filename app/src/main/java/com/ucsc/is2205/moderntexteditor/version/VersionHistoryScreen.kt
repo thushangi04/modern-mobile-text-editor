@@ -34,6 +34,7 @@ import com.ucsc.is2205.moderntexteditor.version.components.VersionList
 fun VersionHistoryScreen(
     fileName: String,
     onBack: () -> Unit,
+    onRollback: (String) -> Unit = {},
     viewModel: VersionViewModel = viewModel()
 ) {
 
@@ -186,6 +187,8 @@ fun VersionHistoryScreen(
                 VersionDetails(
                     version =
                         selectedVersion,
+                        
+                    onRollback = onRollback,
 
                     modifier =
                         Modifier.fillMaxWidth()

@@ -1,10 +1,14 @@
 package com.ucsc.is2205.moderntexteditor.version
 
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.viewModelScope
 import com.ucsc.is2205.moderntexteditor.domain.model.FileVersion
+import com.ucsc.is2205.moderntexteditor.domain.repository.VersionRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
 
 data class VersionUiState(
     val versions: List<FileVersion> = emptyList(),
@@ -14,7 +18,9 @@ data class VersionUiState(
     val errorMessage: String? = null
 )
 
-class VersionViewModel : ViewModel() {
+class VersionViewModel(
+    private val versionRepository: VersionRepository
+) : ViewModel() {
 
     private val _uiState =
         MutableStateFlow(
@@ -35,14 +41,24 @@ class VersionViewModel : ViewModel() {
     fun loadVersions(
         fileName: String
     ) {
-
         currentFileName = fileName
-
-        _uiState.value =
-            _uiState.value.copy(
-                isLoading = false,
-                errorMessage = null
-            )
+        
+        _uiState.value = _uiState.value.copy(isLoading = true, errorMessage = null)
+        
+        viewModelScope.launch {
+            try {
+                val fileVersions = versionRepository.getVersionsForFile(fileName)
+                _uiState.value = _uiState.value.copy(
+                    versions = fileVersions,
+                    isLoading = false
+                )
+            } catch (e: Exception) {
+                _uiState.value = _uiState.value.copy(
+                    isLoading = false,
+                    errorMessage = e.message ?: "Failed to load versions"
+                )
+            }
+        }
     }
 
     /*
@@ -59,42 +75,29 @@ class VersionViewModel : ViewModel() {
         fileName: String,
         content: String
     ) {
-
-        val currentVersions =
-            _uiState.value.versions
-
-        val nextId =
-            if (currentVersions.isEmpty()) {
-                1L
-            } else {
-                currentVersions.maxOf {
-                    it.id
-                } + 1L
+        viewModelScope.launch {
+            try {
+                val newVersion = FileVersion(
+                    fileName = fileName,
+                    content = content,
+                    timestamp = System.currentTimeMillis()
+                )
+                
+                val createdVersion = versionRepository.createVersion(newVersion)
+                
+                val currentVersions = _uiState.value.versions
+                _uiState.value = _uiState.value.copy(
+                    versions = listOf(createdVersion) + currentVersions,
+                    selectedVersion = createdVersion,
+                    compareVersion = null,
+                    errorMessage = null
+                )
+            } catch (e: Exception) {
+                _uiState.value = _uiState.value.copy(
+                    errorMessage = e.message ?: "Failed to save version"
+                )
             }
-
-        val newVersion =
-            FileVersion(
-                id = nextId,
-                fileName = fileName,
-                content = content,
-                timestamp = System.currentTimeMillis()
-            )
-
-        _uiState.value =
-            _uiState.value.copy(
-                versions =
-                    listOf(newVersion) +
-                            currentVersions,
-
-                selectedVersion =
-                    newVersion,
-
-                compareVersion =
-                    null,
-
-                errorMessage =
-                    null
-            )
+        }
     }
 
     /*
@@ -218,10 +221,17 @@ class VersionViewModel : ViewModel() {
      */
 
     fun clearError() {
-
-        _uiState.value =
-            _uiState.value.copy(
-                errorMessage = null
-            )
+        _uiState.value = _uiState.value.copy(errorMessage = null)
+    }
+    
+    companion object {
+        fun provideFactory(
+            repository: VersionRepository
+        ): ViewModelProvider.Factory = object : ViewModelProvider.Factory {
+            @Suppress("UNCHECKED_CAST")
+            override fun <T : ViewModel> create(modelClass: Class<T>): T {
+                return VersionViewModel(repository) as T
+            }
+        }
     }
 }

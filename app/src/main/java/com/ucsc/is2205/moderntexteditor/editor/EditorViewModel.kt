@@ -5,7 +5,9 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.ucsc.is2205.moderntexteditor.data.repository.RepositoryProvider
 import com.ucsc.is2205.moderntexteditor.domain.model.EditorFile
+import com.ucsc.is2205.moderntexteditor.domain.model.FileVersion
 import com.ucsc.is2205.moderntexteditor.domain.repository.FileRepository
+import com.ucsc.is2205.moderntexteditor.domain.repository.VersionRepository
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -38,6 +40,8 @@ class EditorViewModel : ViewModel() {
 
     private var fileRepository: FileRepository? = null
 
+    private var versionRepository: VersionRepository? = null
+
     private var initialized = false
 
     private val undoStack =
@@ -64,10 +68,16 @@ class EditorViewModel : ViewModel() {
                 context.applicationContext
             )
 
-        fileRepository =
+        val repositoryProvider =
             RepositoryProvider(
                 context.applicationContext
-            ).fileRepository
+            )
+
+        fileRepository =
+            repositoryProvider.fileRepository
+
+        versionRepository =
+            repositoryProvider.versionRepository
 
         initialized = true
 
@@ -204,6 +214,14 @@ class EditorViewModel : ViewModel() {
         scheduleRecoverySave()
     }
 
+    fun restoreVersion(
+        content: String
+    ) {
+        updateText(
+            newText = content
+        )
+    }
+
     fun undo() {
         if (undoStack.isEmpty()) {
             return
@@ -288,6 +306,10 @@ class EditorViewModel : ViewModel() {
                 updateModifiedTime = true
             )
 
+            saveVersionSnapshot(
+                state = savedState
+            )
+
             clearRecovery()
         }
 
@@ -327,6 +349,10 @@ class EditorViewModel : ViewModel() {
             saveFileMetadata(
                 state = savedState,
                 updateModifiedTime = true
+            )
+
+            saveVersionSnapshot(
+                state = savedState
             )
 
             clearRecovery()
@@ -441,6 +467,29 @@ class EditorViewModel : ViewModel() {
             repository.saveFileMetadata(
                 metadata
             )
+        }
+    }
+
+    private fun saveVersionSnapshot(
+        state: EditorUiState
+    ) {
+        val repository =
+            versionRepository
+                ?: return
+
+        viewModelScope.launch {
+            try {
+                repository.createVersion(
+                    FileVersion(
+                        fileName = state.fileName,
+                        content = state.text,
+                        timestamp =
+                            System.currentTimeMillis()
+                    )
+                )
+            } catch (_: Exception) {
+                // The physical file remains saved if version storage fails.
+            }
         }
     }
 
