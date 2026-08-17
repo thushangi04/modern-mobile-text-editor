@@ -47,7 +47,7 @@ import kotlinx.coroutines.delay
 @Composable
 fun EditorScreen(
     onOpenSettings: () -> Unit = {},
-    onOpenVersionHistory: (String) -> Unit = {},
+    onOpenVersionHistory: () -> Unit = {},
     onPreviewMarkdown: (String) -> Unit = {},
     editorViewModel: EditorViewModel = viewModel()
 ) {
@@ -157,7 +157,7 @@ fun EditorScreen(
 
             AppHeader(
                 onOpenSettings = onOpenSettings,
-                onOpenVersionHistory = { onOpenVersionHistory(uiState.fileName) }
+                onOpenVersionHistory = onOpenVersionHistory
             )
 
             Spacer(

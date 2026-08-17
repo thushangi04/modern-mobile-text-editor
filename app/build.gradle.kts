@@ -7,14 +7,18 @@ plugins {
 android {
     namespace = "com.ucsc.is2205.moderntexteditor"
 
-    compileSdk = 34
+    compileSdk {
+        version = release(37) {
+            minorApiLevel = 1
+        }
+    }
 
     defaultConfig {
         applicationId = "com.ucsc.is2205.moderntexteditor"
         minSdk = 24
 
         //noinspection EditedTargetSdkVersion
-        targetSdk = 34
+        targetSdk = 37
 
         versionCode = 1
         versionName = "1.0"
@@ -138,6 +142,4 @@ dependencies {
     debugImplementation(
         libs.androidx.compose.ui.tooling
     )
-
-    implementation("io.github.java-diff-utils:java-diff-utils:4.12")
 }

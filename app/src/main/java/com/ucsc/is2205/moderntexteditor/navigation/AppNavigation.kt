@@ -6,19 +6,14 @@ import androidx.compose.runtime.remember
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
-import com.ucsc.is2205.moderntexteditor.data.repository.RepositoryProvider
 import com.ucsc.is2205.moderntexteditor.editor.EditorScreen
 import com.ucsc.is2205.moderntexteditor.settings.SettingsScreen
 import com.ucsc.is2205.moderntexteditor.syntax.MarkdownPreviewScreen
 import com.ucsc.is2205.moderntexteditor.version.VersionHistoryScreen
-import com.ucsc.is2205.moderntexteditor.version.VersionViewModel
-import com.ucsc.is2205.moderntexteditor.editor.EditorViewModel
-import androidx.lifecycle.viewmodel.compose.viewModel
-import androidx.compose.ui.platform.LocalContext
 
 private const val EDITOR_ROUTE = "editor"
 private const val SETTINGS_ROUTE = "settings"
-private const val VERSION_HISTORY_ROUTE = "version_history/{fileName}"
+private const val VERSION_HISTORY_ROUTE = "version_history"
 private const val MARKDOWN_PREVIEW_ROUTE = "markdown_preview"
 
 @Composable
@@ -26,11 +21,6 @@ fun AppNavigation() {
 
     val navController =
         rememberNavController()
-        
-    val context = LocalContext.current
-    val repositoryProvider = remember {
-        RepositoryProvider(context)
-    }
 
     /*
      * Stores Markdown text while navigating
@@ -40,8 +30,6 @@ fun AppNavigation() {
         remember {
             mutableStateOf("")
         }
-
-    val editorViewModel: EditorViewModel = viewModel()
 
     NavHost(
         navController = navController,
@@ -59,8 +47,7 @@ fun AppNavigation() {
         ) {
 
             EditorScreen(
-                editorViewModel = editorViewModel,
-                
+
                 onOpenSettings = {
 
                     navController.navigate(
@@ -70,10 +57,10 @@ fun AppNavigation() {
                     }
                 },
 
-                onOpenVersionHistory = { fileName ->
-                    val encodedFileName = java.net.URLEncoder.encode(fileName, "UTF-8")
+                onOpenVersionHistory = {
+
                     navController.navigate(
-                        "version_history/$encodedFileName"
+                        VERSION_HISTORY_ROUTE
                     ) {
                         launchSingleTop = true
                     }
@@ -120,26 +107,16 @@ fun AppNavigation() {
 
         composable(
             route = VERSION_HISTORY_ROUTE
-        ) { backStackEntry ->
-            val encodedFileName = backStackEntry.arguments?.getString("fileName") ?: ""
-            val fileName = java.net.URLDecoder.decode(encodedFileName, "UTF-8")
-            
-            val versionViewModel: VersionViewModel = viewModel(
-                factory = VersionViewModel.provideFactory(
-                    repositoryProvider.versionRepository
-                )
-            )
+        ) {
 
             VersionHistoryScreen(
-                fileName = fileName,
+
+                fileName = "",
+
                 onBack = {
+
                     navController.popBackStack()
-                },
-                onRollback = { content ->
-                    editorViewModel.updateText(content)
-                    navController.popBackStack()
-                },
-                viewModel = versionViewModel
+                }
             )
         }
 
